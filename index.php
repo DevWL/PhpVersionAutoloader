@@ -1,6 +1,6 @@
 <?php
 
-include_once 'autoloader.php';
+include_once 'PhpVersionAutoloader.php';
 
 use CustomClass;
 
