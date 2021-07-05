@@ -2,9 +2,14 @@
 
 class PhpVersionAutoloader{
   private $baseClassesDirPath = null;
+  private $phpDirArr = [];
   private $phpVersionArr = [];
   private $phpDir = null;
   private $classes = []; /** Keep a record of all loaded classes */
+  private $focePhpVersionId = null;
+  private $matchPhpVersionId = null;
+
+  public $usePreviousVersionIfClassNotFound = false;
 
   /**
    * Allows to change base dir path.
@@ -22,6 +27,7 @@ class PhpVersionAutoloader{
 
   /**
    * Map available dir name and php version
+   * NOTE! The order does matter. Start adding from newst version to the oldest
    * 
    * @see $this->phpVersionArr
    *
@@ -30,7 +36,8 @@ class PhpVersionAutoloader{
    * @return void
    */
   public function registerPhpDir($dir, $phpVersion){
-    $this->phpVersionArr[] = [$dir => $phpVersion];
+    $this->phpVersionArr[] = $phpVersion;
+    $this->phpDirArr[] = $dir;
   }
 
   /**
@@ -38,15 +45,19 @@ class PhpVersionAutoloader{
    */
   public function selectPhpDir(){
 
-    foreach ($this->phpVersionArr as $key => $phpVDir) {
-      $this->position = $key;
-      foreach($phpVDir as $key => $value){
-        if (version_compare(PHP_VERSION, $value) >= 0){
-          $this->phpDir = $key;
-          break 2;
-        }
+    foreach ($this->phpVersionArr as $key => $phpVersion) {
+      if (version_compare(PHP_VERSION, $phpVersion) >= 0){
+        $this->phpDir = $this->phpDirArr[$key];
+        $this->matchPhpVersionId = $key;
+        break;
       }
     }
+  }
+
+
+  public function focePhpVersionId(int $id)
+  {
+    $this->focePhpVersionId = $id;
   }
 
   /**
@@ -54,25 +65,41 @@ class PhpVersionAutoloader{
    *
    * @return void
    */
-  public function register(){
-    spl_autoload_register(function($className)
+  public function register($id){
+    spl_autoload_register(function($className) use ($id)
     {
         $namespace = str_replace("\\","/",__NAMESPACE__);
         $className = str_replace("\\","/",$className);
 
         $this->baseClassesDirPath = ($this->baseClassesDirPath === null) ? str_replace("\\","/",__DIR__) : $this->baseClassesDirPath;
 
-        $class = $this->baseClassesDirPath."/classes/".$this->phpDir.'/'. (empty($namespace)?"":$namespace."/")."{$className}.php";
-        $this->classes[] = $class;
+        $class = $this->baseClassesDirPath."/classes/".$this->phpDirArr[$id].'/'. (empty($namespace)?"":$namespace."/")."{$className}.php";
+        
         
         if (file_exists($class)){
+          $this->classes[] = "+ Loaded class from: " . $this->phpDirArr[$id] . " for: - " . $class;
           include_once($class);
+        }else if($this->usePreviousVersionIfClassNotFound === true){
+          // if class does not exsist try to load file from lower php version directory. 
+          $this->classes[] = "- Missing class in: " . $this->phpDirArr[$id] . " for: - " . $class;
+          if($id + 1 <= count($this->phpVersionArr)){
+            $this->register($id + 1);
+          }
         }else{
-          // ... if not exsist try to load lower php version file?
-          // ... or throw new Error("Error Processing Request", 1);
-          
+          // do something scary
         }
     });
+  }
+
+  public function run()
+  {
+    $id = $this->matchPhpVersionId;
+    if($this->focePhpVersionId !== null){
+      $id = $this->focePhpVersionId;
+    }
+    
+    $this->selectPhpDir(); // compare system php version and selects the correct phpX.X subfolder
+    $this->register($id); // rgister autoloader 
   }
 
 }
@@ -81,12 +108,16 @@ class PhpVersionAutoloader{
 /**
  * Use example
  */
-$loader = new PhpVersionAutoloader(); // init PhpVersionAutoloader object
+$loader = new PhpVersionAutoloader(); // create PhpVersionAutoloader object
 $loader->setBaseClassesDirPath('C:/xampp/htdocs/blog/blog autoloading'); // if not used will use _DIR_ to create path
 
+// Register supported PHP Version. The order does matter. Start adding from newst version to the oldest
 $loader->registerPhpDir('php8.x', '8.0.0'); // as "folder name" => "php version" 
 $loader->registerPhpDir('php7.x', '7.0.0'); // ...
 $loader->registerPhpDir('php5.6', '5.6.0'); // ...
 
-$loader->selectPhpDir(); // compare system php version and selects the correct phpX.X subfolder
-$loader->register(); // register autoloader
+$loader->focePhpVersionId(0); // [0 => 'php8.x', 1 => 'php7.x', ...]
+
+$loader->usePreviousVersionIfClassNotFound = true; // dafault is false
+
+$loader->run(); // run autoloader
