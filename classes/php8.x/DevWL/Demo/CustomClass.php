@@ -1,5 +1,7 @@
 <?php
 
+namespace DevWL\Demo;
+
 class CustomClass
 {
     public function __construct()

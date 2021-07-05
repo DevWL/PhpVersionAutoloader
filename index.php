@@ -2,7 +2,7 @@
 
 include_once 'PhpVersionAutoloader.php';
 
-use CustomClass;
+use DevWL\Demo\CustomClass;
 
 var_dump($loader);
 
